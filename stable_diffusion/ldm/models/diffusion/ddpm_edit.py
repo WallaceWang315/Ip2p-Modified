@@ -1031,7 +1031,7 @@ class LatentDiffusion(DDPM):
         x_noisy_ref = self.q_sample(x_start=x_ref,t=t,noise=noise_ref)
 
         model_output = self.apply_model(x_noisy, t, cond)
-        model_output_ref = self.apply_model(x_noisy_ref,t,cond)#此处没有可用cond，只能够使用C_tar
+        model_output_ref = self.apply_model(x_noisy_ref,t,cond) + self.GuidanceNet(x_noisy_ref,t,cond)#此处没有可用cond，只能够使用C_tar
 
         loss_dict = {}
         prefix = 'train' if self.training else 'val'
@@ -1043,7 +1043,26 @@ class LatentDiffusion(DDPM):
         else:
             raise NotImplementedError()
 
-        loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
+        # loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
+        # loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
+
+        # logvar_t = self.logvar[t].to(self.device)
+        # loss = loss_simple / torch.exp(logvar_t) + logvar_t
+        # # loss = loss_simple / torch.exp(self.logvar) + self.logvar
+        # if self.learn_logvar:
+        #     loss_dict.update({f'{prefix}/loss_gamma': loss.mean()})
+        #     loss_dict.update({'logvar': self.logvar.data.mean()})
+
+        # loss = self.l_simple_weight * loss.mean()
+
+        # loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3))
+        # loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
+        # loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
+        # loss += (self.original_elbo_weight * loss_vlb)
+        # loss_dict.update({f'{prefix}/loss': loss})
+        #用于更新原本Unet参数的函数并替换为我们新网络的Loss函数，同时在LatentDiffusion中设置优化参数只优化新网络的参数
+
+        loss_simple = self.get_loss(model_output_ref, model_output, mean=False).mean([1, 2, 3])
         loss_dict.update({f'{prefix}/loss_simple': loss_simple.mean()})
 
         logvar_t = self.logvar[t].to(self.device)
@@ -1055,7 +1074,7 @@ class LatentDiffusion(DDPM):
 
         loss = self.l_simple_weight * loss.mean()
 
-        loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3))
+        loss_vlb = self.get_loss(model_output_ref, model_output, mean=False).mean(dim=(1, 2, 3))
         loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
         loss_dict.update({f'{prefix}/loss_vlb': loss_vlb})
         loss += (self.original_elbo_weight * loss_vlb)
