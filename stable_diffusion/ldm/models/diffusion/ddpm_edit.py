@@ -9,6 +9,7 @@ https://github.com/CompVis/taming-transformers
 # File modified by authors of InstructPix2Pix from original (https://github.com/CompVis/stable-diffusion).
 # See more details in LICENSE.
 
+import pdb
 import torch
 import torch.nn as nn
 import numpy as np
@@ -695,6 +696,7 @@ class LatentDiffusion(DDPM):
         z = self.get_first_stage_encoding(encoder_posterior).detach()
         cond_key = cond_key or self.cond_stage_key
         xc = super().get_input(batch, cond_key)
+        #pdb.set_trace()
         if bs is not None:
             xc["c_crossattn"] = xc["c_crossattn"][:bs]
             xc["c_concat"] = xc["c_concat"][:bs]
@@ -879,10 +881,10 @@ class LatentDiffusion(DDPM):
 
     def shared_step(self, batch, **kwargs):
         x, c, xc = self.get_input(batch, self.first_stage_key,return_original_cond=True)
-        loss = self(x, c, xc)
+        loss = self(x, xc, c)
         return loss
 
-    def forward(self, x, c, *args, **kwargs):
+    def forward(self, x, xc, c, *args, **kwargs):
         t = torch.randint(0, self.num_timesteps, (x.shape[0],), device=self.device).long()
         if self.model.conditioning_key is not None:
             assert c is not None
@@ -891,7 +893,7 @@ class LatentDiffusion(DDPM):
             if self.shorten_cond_schedule:  # TODO: drop this option
                 tc = self.cond_ids[t].to(self.device)
                 c = self.q_sample(x_start=c, t=tc, noise=torch.randn_like(c.float()))
-        return self.p_losses(x, c, t, *args, **kwargs)
+        return self.p_losses(x, xc, c, t, *args, **kwargs)
 
     def _rescale_annotations(self, bboxes, crop_coordinates):  # TODO: move to dataset
         def rescale_bbox(bbox):
@@ -1024,9 +1026,12 @@ class LatentDiffusion(DDPM):
         kl_prior = normal_kl(mean1=qt_mean, logvar1=qt_log_variance, mean2=0.0, logvar2=0.0)
         return mean_flat(kl_prior) / np.log(2.0)
 
-    def p_losses(self, x_start, cond, t, noise=None,x_ref = None):
+    def p_losses(self, x_start, x_ref, cond, t, noise=None, noise_ref = None):
+        #pdb.set_trace()
+        x_ref = x_ref["c_concat"]
         noise = default(noise, lambda: torch.randn_like(x_start))
         noise_ref = default(noise_ref,lambda: torch.randn_like(x_ref))
+        pdb.set_trace()
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_noisy_ref = self.q_sample(x_start=x_ref,t=t,noise=noise_ref)
 
